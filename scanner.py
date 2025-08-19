@@ -84,11 +84,12 @@ def get_product_links(html, number):
 
 # Allow user to choose product if multiple are found with same number
 def choose_product(product_links):
+    choice = 0
     if len(product_links) > 1:
         print("\nMultiple products found with same number:")
         for idx, product in enumerate(product_links):
             print(f"{idx+1}: {product['name']} | Set: {product['set']} | Market Price: {product['market price']} | ID: {product['id']}")
-
+    
         while True:
             try:
                 choice = int(input("Select product number to lookup: ")) - 1
@@ -102,7 +103,7 @@ def choose_product(product_links):
     else:
         selected_link = product_links[0]['url']
 
-    return selected_link
+    return selected_link, choice
 
 
 # Format product link to include condition filter
@@ -114,7 +115,7 @@ def format_product_url(product_link, condition):
     match condition:
         # By default, if condition is not specified, use "Near Mint"
         case None:
-            url_suffix = "Near+Mint"
+            url_suffix = "None"
         case "nm":
             url_suffix = "Near+Mint"
         case "lp":
@@ -127,6 +128,9 @@ def format_product_url(product_link, condition):
             url_suffix = "Damaged"
 
     formatted = url + product_link + f"&Condition={url_suffix}"
+    if url_suffix == None:
+        formatted = url + product_link
+
     return formatted
 
 
@@ -204,7 +208,7 @@ if __name__ == "__main__":
             continue
 
         # If multiple products found, let user choose
-        selected_link = choose_product(product_links)
+        selected_link, product_index = choose_product(product_links)
 
         # Add condition to product link
         formatted_product_url = format_product_url(selected_link, condition)
@@ -231,5 +235,6 @@ if __name__ == "__main__":
 
         # Print out data in a table format
         print(f"\nSales Data for: {name} #{number}, {condition.upper()}\n")
+        print(f"Market Price: {product_links[product_index]['market price']}")
         print(tabulate(sales_data, headers="keys", tablefmt="pretty"))
 
