@@ -4,53 +4,52 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException
 import re
 from tabulate import tabulate
 import time
 
-# USER SHOULD CHANGE THIS VALUE DEPENDING ON HOW MANY PAGES THEY WANT TO SEARCH THROUGH FOR THEIR CARD
-# THE HIGHER THE VALUE, THE LONGER THE SEARCH
-MAX_PAGES = 5
 
 
 # Display loading message with dots during waits
 def loading_msg(msg):
-    print(msg, end='', flush=True)
+    print(msg, end="", flush=True)
     for _ in range(3):
         time.sleep(0.5)
-        print('.', end='', flush=True)
+        print(".", end="", flush=True)
     print()
 
 
 # function using regex to separate search term into 3 variables
 def parse_searchterm(search):
-    # Look for a pattern of name, number, condition such as "charizard ex #105/112 nm". Allow accidental whitespace
-    pattern = r"(.+)\s+#([\w/]+)(?:\s+(\w+))?\s*$"
+    # Look for a pattern of name, number, condition, pg number such as "charizard ex #105/112 nm p5". Allow accidental whitespace
+    pattern = r"(.+)\s+#([\w/]+)(?:\s+(?!p(?:age)?\d*|pg\d*)(\w+))?(?:\s+(?:p|pg|page)\s*(\d+))?\s*$"
     match = re.match(pattern, search.strip(), re.IGNORECASE)
 
     # extract variables
     if match:
-        name, number, condition = match.groups()
-        # If condition is not specified, default to "nm" (Near Mint)
+        name, number, condition, pg = match.groups()
         if not condition:
             condition = "unspecified"
-        return name.strip(), number.strip().upper(), condition.lower()
+        if not pg:
+            pg = 1
+        return name.strip(), number.strip().upper(), condition.lower(), int(pg)
     else:
-        raise ValueError("Search term must be in a format like 'charizard ex #105/112 nm'")
+        raise ValueError("Search term must be in a format like 'charizard ex #105/112 nm p4'")
 
 
 # Get each product information on the current page
-def get_product_links(html, number):
+def get_product_links(html, number, pg):
     soup = BeautifulSoup(html, "html.parser")
     search_results = soup.find("section", class_="search-results")
     products = []
     
     # Look through each search result 
-    for card in search_results.find_all('div', class_='product-card'):
+    for card in search_results.find_all("div", class_="product-card"):
         product_id = None
-        spans = card.find_all('span')
+        spans = card.find_all("span")
         for span in spans:
-            if span.text.startswith('#'):
+            if span.text.startswith("#"):
                 product_id = span.text.strip()
                 break
         # If product ID not found, go next
@@ -59,28 +58,30 @@ def get_product_links(html, number):
         # If the product ID matches the number we are looking for
         if number in product_id:
             # Get product name
-            name_elem = card.find('span', class_='product-card__title truncate')
+            name_elem = card.find("span", class_="product-card__title truncate")
             name = name_elem.text.strip() if name_elem else "Unknown Product"
 
             # Get product set
-            set_elem = card.find('h4', class_='product-card__set-name')
+            set_elem = card.find("h4", class_="product-card__set-name")
             set = set_elem.text.strip() if set_elem else "Unknown Set"
 
-            market_price_elem = card.find('span', class_='product-card__market-price--value')
+            market_price_elem = card.find("span", class_="product-card__market-price--value")
             market_price = market_price_elem.text.strip() if market_price_elem else "N/A"
 
             # Filter out 'a' tags that don't have href attributes
-            link = card.find('a', href=True)
+            link = card.find("a", href=True)
             if link:
                 product = {"name": name,
                            "set": set,
                            "id": product_id,
-                           "url": link['href'],
+                           "url": link["href"],
                            "market price": market_price
                         }
                 products.append(product)
+                print(f"Found matching product on page {pg}")
                 
     return products
+
 
 # See if there exists a next page
 def check_next_page(html, page):
@@ -97,12 +98,14 @@ def check_next_page(html, page):
 
 
 # Search multiple result pages until product is found or limit reached
-def get_all_product_links(driver, name, number):
+def get_all_product_links(driver, name, number, page):
     products = []
-    page = 1
-    while page <= MAX_PAGES and not products:
-        print(f"Checking page {page}...")
-        url = f"https://www.tcgplayer.com/search/all/product?&q={name.replace(' ', '+')}&page={page}"
+    # initial page number
+    pg = 1
+    max_pages = page
+    while pg <= max_pages:
+        print(f"Checking page {pg}...")
+        url = f"https://www.tcgplayer.com/search/all/product?&q={name.replace(' ', '+')}&page={pg}"
         driver.get(url)
 
         WebDriverWait(driver, 10).until(
@@ -110,16 +113,17 @@ def get_all_product_links(driver, name, number):
         )
 
         html = driver.page_source
-        products = get_product_links(html, number)
+        page_products = get_product_links(html, number, pg)
+        products.extend(page_products)
 
-        if products:
-            break
-        elif check_next_page(html, page):
-            page += 1
+        if check_next_page(html, pg):
+            pg += 1
         else:
             break
+    print(products)
 
     return products
+
 
 # Allow user to choose product if multiple are found with same number
 def choose_product(product_links):
@@ -133,14 +137,14 @@ def choose_product(product_links):
             try:
                 choice = int(input("Select product number to lookup: ")) - 1
                 if 0 <= choice < len(product_links):
-                    selected_link = product_links[choice]['url']
+                    selected_link = product_links[choice]["url"]
                     break
                 else:
                     print("Invalid selection. Try again.")
             except ValueError:
                 print("Please enter a valid number.")
     else:
-        selected_link = product_links[0]['url']
+        selected_link = product_links[0]["url"]
 
     return selected_link, choice
 
@@ -220,21 +224,21 @@ if __name__ == "__main__":
     # Keep prompting for input until user exits
     while True:
         search = input("\nEnter card search (or type 'exit' to quit): ")
-        if search.strip().lower() == 'exit':
+        if search.strip().lower() == "exit":
             print("Exiting...")
             break
         try:
-            name, number, condition = parse_searchterm(search)
-            print(f"Searching for: name='{name}', number='{number}', condition='{condition}'")
+            name, number, condition, page = parse_searchterm(search)
+            print(f"Searching for: name='{name}', number='{number}', condition='{condition}', pages to search={page}")
         except ValueError as e:
             print(e)
             continue
 
         # Search through pages for the product
-        product_links = get_all_product_links(driver, name, number)
+        product_links = get_all_product_links(driver, name, number, page)
         # If no results, reprompt user
         if not product_links:
-            print("No results found for your query. Retry your query or increase MAX_PAGES\n")
+            print("No results found for your query. Retry your query or increase #pages\n")
             continue
 
         # If multiple products found, let user choose
@@ -248,9 +252,13 @@ if __name__ == "__main__":
         loading_msg("Loading product data")
 
         # Wait for button to load
-        view_more_data_button = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CLASS_NAME, "modal__activator"))
-        )
+        try:
+            view_more_data_button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CLASS_NAME, "modal__activator"))
+            )
+        except TimeoutException:
+            print("Timed out waiting for data to load. Please try again.")
+            continue
 
         # If condition filter fails, inform the user
         # Let JS load
