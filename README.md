@@ -13,21 +13,16 @@ This program allows you to search for Pokémon cards on TCGPlayer, select the co
 
 - Python 3.8+
 - Google Chrome browser
-- ChromeDriver (matching your Chrome version)
 
 ## Installation
 
 1. **Clone or download this repository.**
+   - If downloading the zip, be sure to unzip the folder before running.
 
 2. **Install Python dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
-
-3. **Install ChromeDriver:**
-   - Download ChromeDriver from [chromedriver.chromium.org/downloads](https://chromedriver.chromium.org/downloads)
-   - Make sure the version matches your installed Chrome browser.
-   - Place the `chromedriver` executable in your PATH (e.g., `/usr/local/bin`).
 
 ## Usage
 
@@ -49,11 +44,13 @@ This program allows you to search for Pokémon cards on TCGPlayer, select the co
 ## Notes
 
 - The browser window will open during execution. You may need to click back into your terminal to enter your selection.
-- If you encounter issues with ChromeDriver, ensure it matches your Chrome version and is in your PATH.
 
 ## Troubleshooting
 
 - If you see errors about missing modules, run `pip install -r requirements.txt` again.
-- If the browser does not open, check your ChromeDriver installation.
+- Sometimes a search query will not return a result, even though that card technically exists in TCGplayer. 
+      - This is because TCGplayer may move product listings around randomly.
+      - As this program checks a specified number of pages, the card of interest may be placed in a deeper page.
+      - Rerunning the query can fix this issue.
 - If you encounter any bugs or errors, please let me know so I can fix them. Contact: omnirivani@gmail.com
 

@@ -8,6 +8,11 @@ import re
 from tabulate import tabulate
 import time
 
+# USER SHOULD CHANGE THIS VALUE DEPENDING ON HOW MANY PAGES THEY WANT TO SEARCH THROUGH FOR THEIR CARD
+# THE HIGHER THE VALUE, THE LONGER THE SEARCH
+MAX_PAGES = 5
+
+
 # Display loading message with dots during waits
 def loading_msg(msg):
     print(msg, end='', flush=True)
@@ -28,23 +33,18 @@ def parse_searchterm(search):
         name, number, condition = match.groups()
         # If condition is not specified, default to "nm" (Near Mint)
         if not condition:
-            condition = "nm"
-        return name.strip(), number.strip(), condition.lower()
+            condition = "unspecified"
+        return name.strip(), number.strip().upper(), condition.lower()
     else:
         raise ValueError("Search term must be in a format like 'charizard ex #105/112 nm'")
 
 
-def get_search_url(name):    
-    # Format the search url by adding name to end
-    search_url = f"https://www.tcgplayer.com/search/pokemon/product?productLineName=pokemon&q={name.replace(' ', '+')}"
-    return search_url
-
-
+# Get each product information on the current page
 def get_product_links(html, number):
     soup = BeautifulSoup(html, "html.parser")
     search_results = soup.find("section", class_="search-results")
     products = []
-
+    
     # Look through each search result 
     for card in search_results.find_all('div', class_='product-card'):
         product_id = None
@@ -82,6 +82,45 @@ def get_product_links(html, number):
                 
     return products
 
+# See if there exists a next page
+def check_next_page(html, page):
+    soup = BeautifulSoup(html, "html.parser")
+    pagination = soup.find("div", class_="tcg-pagination__pages")
+    for page_link_button in pagination.find_all("a", class_="is-active router-link-exact-active tcg-button tcg-button--md tcg-standard-button tcg-standard-button--flat"):
+        button_number = page_link_button.text.strip()
+        if int(button_number) > page:
+            # If next page number is greater than current page, there exists a next page
+            return True
+    # If no page number is greater than current page, there is no next page
+    print(f"No page {page+1} found")
+    return False
+
+
+# Search multiple result pages until product is found or limit reached
+def get_all_product_links(driver, name, number):
+    products = []
+    page = 1
+    while page <= MAX_PAGES and not products:
+        print(f"Checking page {page}...")
+        url = f"https://www.tcgplayer.com/search/all/product?&q={name.replace(' ', '+')}&page={page}"
+        driver.get(url)
+
+        WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "search-results"))
+        )
+
+        html = driver.page_source
+        products = get_product_links(html, number)
+
+        if products:
+            break
+        elif check_next_page(html, page):
+            page += 1
+        else:
+            break
+
+    return products
+
 # Allow user to choose product if multiple are found with same number
 def choose_product(product_links):
     choice = 0
@@ -114,8 +153,8 @@ def format_product_url(product_link, condition):
     url_suffix = ""
     match condition:
         # By default, if condition is not specified, use "Near Mint"
-        case None:
-            url_suffix = "None"
+        case "unspecified":
+            url_suffix = None
         case "nm":
             url_suffix = "Near+Mint"
         case "lp":
@@ -148,17 +187,19 @@ def parse_data(html):
         price_td = sale.find("td", class_="latest-sales-table__tbody__price")
         date_td = sale.find("td", class_="latest-sales-table__tbody__date")
         quantity_td = sale.find("td", class_="latest-sales-table__tbody_quantity")
-        condition_div = sale.find("div", class_="tcg-tooltip__toggle")
 
         # Make sure to handle cases when data is not present
         price = price_td.text.strip() if price_td else "N/A"
         date = date_td.text.strip() if date_td else "N/A"
         quantity = quantity_td.text.strip() if quantity_td else "N/A"
 
-        # The condition div is toggleable(has children), so need to get only the first text node
-        if condition_div:
+        # Also get condition of card sold
+        # Sometimes the class is displayed differently on different devices, so check for both
+        toggle = sale.select_one(".tcg-tooltip__toggle, .tcg-tooltiptoggle")
+        # The div containing 'condition' is toggleable(has children), so need to get only the first text node
+        if toggle:
             # Get only the direct text, not from children
-            condition = condition_div.find(string=True, recursive=False).strip()
+            condition = toggle.find(string=True, recursive=False).strip()
         else:
             condition = "N/A"
 
@@ -170,6 +211,12 @@ def parse_data(html):
 
 
 if __name__ == "__main__":
+
+    # Use same driver for all future searches
+    chrome_options = Options()
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("--window-size=1200,800")
+    driver = webdriver.Chrome(options=chrome_options)
     # Keep prompting for input until user exits
     while True:
         search = input("\nEnter card search (or type 'exit' to quit): ")
@@ -178,33 +225,16 @@ if __name__ == "__main__":
             break
         try:
             name, number, condition = parse_searchterm(search)
+            print(f"Searching for: name='{name}', number='{number}', condition='{condition}'")
         except ValueError as e:
             print(e)
             continue
 
-        search_url = get_search_url(name)
-
-        # Navigate to search url with selenium
-        chrome_options = Options()
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_argument("--window-size=1200,800")
-
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.get(search_url)
-
-        loading_msg("Loading search results")
-        # Wait for javascript to load  before getting pg src
-        WebDriverWait(driver, 10).until(
-            EC.visibility_of_element_located((By.CLASS_NAME, "search-results"))
-        )
-
-        # Get the page source after javascript has loaded, then get product link
-        html = driver.page_source
-        product_links = get_product_links(html, number)
+        # Search through pages for the product
+        product_links = get_all_product_links(driver, name, number)
         # If no results, reprompt user
         if not product_links:
-            print("No results found for your query. There may be no sales data for that card+condition.")
-            driver.quit()
+            print("No results found for your query. Retry your query or increase MAX_PAGES\n")
             continue
 
         # If multiple products found, let user choose
@@ -217,24 +247,34 @@ if __name__ == "__main__":
         driver.get(formatted_product_url)
         loading_msg("Loading product data")
 
-        # Wait for button to load then click "View More Data"
+        # Wait for button to load
         view_more_data_button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.CLASS_NAME, "modal__activator"))
         )
-        view_more_data_button.click()
+
+        # If condition filter fails, inform the user
+        # Let JS load
         time.sleep(1)
-        # Grab html after enough time has passed to update the table
+        # If no results msg is not found, no_result will return an empty list
+        no_results = driver.find_elements(By.CLASS_NAME, "no-result__heading")
+        # Check if list is populated with something
+        if no_results:
+            print(f"***No search results found for condition: '{condition}'. Now displaying recent 5 sales without condition filter.***")
+            condition = "unspecified"
+        
+        # Click button to view sale data
+        view_more_data_button.click()
+
+        # Wait for table to load before getting html
+        time.sleep(1)
         table_elem = driver.find_element(By.CLASS_NAME, "latest-sales-table__tbody")
         html_table = table_elem.get_attribute("outerHTML")
-
-        # Close driver, as we have our data now
-        driver.quit()
 
         # Extract sales data from page source
         sales_data = parse_data(html_table)
 
         # Print out data in a table format
-        print(f"\nSales Data for: {name} #{number}, {condition.upper()}\n")
+        print(f"\nSales Data for: {name} #{number}, condition: {condition}")
         print(f"Market Price: {product_links[product_index]['market price']}")
         print(tabulate(sales_data, headers="keys", tablefmt="pretty"))
 
