@@ -10,6 +10,11 @@ from tabulate import tabulate
 import time
 
 
+# Change these global variables for your use case as needed!
+LOOK_FOR_MULTIPLE_PRODUCTS = False
+MAX_PAGES = 5
+IGNORE_JUMBO_CARDS = True
+
 
 # Display loading message with dots during waits
 def loading_msg(msg):
@@ -32,7 +37,7 @@ def parse_searchterm(search):
         if not condition:
             condition = "unspecified"
         if not pg:
-            pg = 1
+            pg = MAX_PAGES
         return name.strip(), number.strip().upper(), condition.lower(), int(pg)
     else:
         raise ValueError("Search term must be in a format like 'charizard ex #105/112 nm p4'")
@@ -64,6 +69,10 @@ def get_product_links(html, number, pg):
             # Get product set
             set_elem = card.find("h4", class_="product-card__set-name")
             set = set_elem.text.strip() if set_elem else "Unknown Set"
+            
+            # Skip over jumbo cards if bool is true
+            if IGNORE_JUMBO_CARDS and "Jumbo Cards" in set:
+                continue
 
             market_price_elem = card.find("span", class_="product-card__market-price--value")
             market_price = market_price_elem.text.strip() if market_price_elem else "N/A"
@@ -108,13 +117,20 @@ def get_all_product_links(driver, name, number, page):
         url = f"https://www.tcgplayer.com/search/all/product?&q={name.replace(' ', '+')}&page={pg}"
         driver.get(url)
 
-        WebDriverWait(driver, 10).until(
-            EC.visibility_of_element_located((By.CLASS_NAME, "search-results"))
-        )
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located((By.CLASS_NAME, "search-results"))
+            )
+        except TimeoutException:
+            print("Timed out while looking for products. Please try again.")
 
         html = driver.page_source
         page_products = get_product_links(html, number, pg)
         products.extend(page_products)
+
+        # Toggle for first match or look for multiple matching products
+        if not LOOK_FOR_MULTIPLE_PRODUCTS and products:
+            break
 
         if check_next_page(html, pg):
             pg += 1
@@ -219,7 +235,9 @@ if __name__ == "__main__":
     # Use same driver for all future searches
     chrome_options = Options()
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument("--window-size=1200,800")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
+
     driver = webdriver.Chrome(options=chrome_options)
     # Keep prompting for input until user exits
     while True:
@@ -238,7 +256,7 @@ if __name__ == "__main__":
         product_links = get_all_product_links(driver, name, number, page)
         # If no results, reprompt user
         if not product_links:
-            print("No results found for your query. Retry your query or increase #pages\n")
+            print(f"Could not find that product within {page} pages. Retry your query or increase MAX_PAGES near the top of the file\n")
             continue
 
         # If multiple products found, let user choose
