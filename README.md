@@ -30,7 +30,7 @@ This program allows you to search for Pokémon cards on TCGPlayer, select the co
    ```bash
    python scanner.py
    ```
-   - You will be prompted for a card search in the format: "[card name] #[number] [condition] p[pages to search]"
+   - You will be prompted for a card search in the format: "[card name] #[number] [optional:condition] p[optional:pages to search]"
         - Name, number, and condition are case-insensitive.
         - The number argument must include "#", followed immediately by a number like 001/021 or a term like TG05/TG30.
         - Condition keyword is one of the following: nm, lp, mp, hp, d
@@ -54,6 +54,10 @@ This program allows you to search for Pokémon cards on TCGPlayer, select the co
 
 - The browser window will open during execution. You may need to click back into your terminal to enter your selection.
 - Search results are better if you can specify in the name "ex" or "vmax".
+- There are three toggleable options near the top of the code: LOOK_FOR_MULTIPLE_PRODUCTS, MAX_PAGES, and IGNORE_JUMBO_CARDS. 
+      - LOOK_FOR_MULTIPLE_PRODUCTS --> If set to True, the program will continue searching for matching products through MAX_PAGES, unless specified, even if one is already found.
+      - MAX_PAGES --> The default max number of pages the program will search through before terminating. If product is found earlier, it will not search more pages, unless LOOK_FOR_MULTIPLE_PRODUCTS = True.
+      - IGNORE_JUMBO_CARDS --> If set to False, the program will include jumbo cards in the search.
 
 ## Troubleshooting
 
