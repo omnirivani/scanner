@@ -14,6 +14,7 @@ import time
 LOOK_FOR_MULTIPLE_PRODUCTS = False
 MAX_PAGES = 5
 IGNORE_JUMBO_CARDS = True
+INCLUDE_JAPANESE_CARDS = True
 
 
 # Display loading message with dots during waits
@@ -114,7 +115,12 @@ def get_all_product_links(driver, name, number, page):
     max_pages = page
     while pg <= max_pages:
         print(f"Checking page {pg}...")
-        url = f"https://www.tcgplayer.com/search/all/product?&q={name.replace(' ', '+')}&page={pg}"
+        # Filter japanese cards as needed
+        if INCLUDE_JAPANESE_CARDS:
+            url = f"https://www.tcgplayer.com/search/all/product?&q={name.replace(' ', '+')}&page={pg}"
+        else:
+            url = f"https://www.tcgplayer.com/search/pokemon/productLineName=pokemon&q={name.replace(' ', '+')}&page={pg}"
+            
         driver.get(url)
 
         try:

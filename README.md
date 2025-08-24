@@ -54,10 +54,11 @@ This program allows you to search for Pokémon cards on TCGPlayer, select the co
 
 - The browser window will open during execution. You may need to click back into your terminal to enter your selection.
 - Search results are better if you can specify in the name "ex" or "vmax".
-- There are three toggleable options near the top of the code: LOOK_FOR_MULTIPLE_PRODUCTS, MAX_PAGES, and IGNORE_JUMBO_CARDS. 
+- There are four toggleable options near the top of the code: LOOK_FOR_MULTIPLE_PRODUCTS, MAX_PAGES, IGNORE_JUMBO_CARDS, and INCLUDE_JAPANESE_CARDS. 
       - LOOK_FOR_MULTIPLE_PRODUCTS --> If set to True, the program will continue searching for matching products through MAX_PAGES, unless specified, even if one is already found.
       - MAX_PAGES --> The default max number of pages the program will search through before terminating. If product is found earlier, it will not search more pages, unless LOOK_FOR_MULTIPLE_PRODUCTS = True.
       - IGNORE_JUMBO_CARDS --> If set to False, the program will include jumbo cards in the search.
+      - INCLUDE_JAPANESE_CARDS --> If set to False, the program will ignore japanese cards in the search.
 
 ## Troubleshooting
 
